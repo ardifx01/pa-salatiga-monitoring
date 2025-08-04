@@ -46,11 +46,29 @@ export default function PublicDashboard() {
     email_notifications_enabled: true,
     auto_slide_enabled: true
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadSettings();
-    loadMonitoringData();
+    const initializeData = async () => {
+      await loadSettings();
+      await loadMonitoringData();
+    };
+    
+    initializeData();
   }, []);
+
+  // Auto-refresh data based on settings
+  useEffect(() => {
+    if (!settings.auto_update_enabled) return;
+    
+    const updateInterval = setInterval(() => {
+      console.log('Auto-refreshing monitoring data...');
+      loadMonitoringData();
+      setLastUpdate(new Date());
+    }, settings.update_interval * 60 * 1000);
+
+    return () => clearInterval(updateInterval);
+  }, [settings.auto_update_enabled, settings.update_interval]);
 
   useEffect(() => {
     // Auto slide between pages based on settings
@@ -82,17 +100,6 @@ export default function PublicDashboard() {
     };
   }, [settings.auto_slide_enabled, settings.slide_duration]);
 
-  useEffect(() => {
-    // Update timestamp based on settings
-    if (!settings.auto_update_enabled) return;
-    
-    const updateInterval = setInterval(() => {
-      setLastUpdate(new Date());
-      // Optionally reload monitoring data here
-    }, settings.update_interval * 60 * 1000);
-
-    return () => clearInterval(updateInterval);
-  }, [settings.auto_update_enabled, settings.update_interval]);
 
   const loadSettings = async () => {
     try {
@@ -106,41 +113,159 @@ export default function PublicDashboard() {
     }
   };
 
-  const loadMonitoringData = () => {
-    // Data sesuai dengan design PA Salatiga
-    const mockData: MonitoringData[] = [
-      // Page 1 - Sistem Utama
-      { id: 1, title: 'SIPP', value: 97.5, maxValue: 100, unit: '%', status: 'good', progress: 97.5, isRealtime: true, subtitle: 'Sistem Informasi Penelusuran Perkara', currentValue: '(11.7/12)', icon: '⚖️' },
-      { id: 2, title: 'Mediasi', value: 39.1, maxValue: 100, unit: '%', status: 'critical', progress: 39.1, isRealtime: true, subtitle: 'Tingkat keberhasilan Mediasi', currentValue: '(3.13/8)', icon: '🤝' },
-      { id: 3, title: 'E-Court', value: 99.6, maxValue: 100, unit: '%', status: 'good', progress: 99.6, isRealtime: true, subtitle: 'Implementasi Electronic Court System', currentValue: '(11.95/12)', icon: '💻' },
-      { id: 4, title: 'Gugatan Mandiri', value: 50.0, maxValue: 100, unit: '%', status: 'critical', progress: 50.0, isRealtime: true, subtitle: 'Implementasi Gugatan Mandiri', currentValue: '(1/2)', icon: '🛠️' },
-      { id: 5, title: 'Banding', value: 60.0, maxValue: 100, unit: '%', status: 'critical', progress: 60.0, isRealtime: true, subtitle: 'Kecepatan Administrasi Banding', currentValue: '(1.2/2)', icon: '✈️' },
-      { id: 6, title: 'Kasasi & PK', value: 60.0, maxValue: 100, unit: '%', status: 'critical', progress: 60.0, isRealtime: true, subtitle: 'Kecepatan Administrasi Kasasi', currentValue: '(1.2/2)', icon: '💼' },
-      { id: 7, title: 'Eksaminasi', value: 98.3, maxValue: 100, unit: '%', status: 'good', progress: 98.3, isRealtime: true, subtitle: 'Nilai Eksaminasi Berkas melalui e-Eksaminasi', currentValue: '(2.95/3)', icon: '🔍' },
-      { id: 8, title: 'Keuangan Perkara', value: 94.5, maxValue: 100, unit: '%', status: 'good', progress: 94.5, isRealtime: true, subtitle: 'Nilai Validasi Keuangan Perkara', currentValue: '(3.78/4)', icon: '💰' },
-      { id: 9, title: 'Pengelolaan PNBP', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Nilai Pengelolaan Negara Bukan Pajak', currentValue: '(3/3)', icon: '🏛️' },
-      { id: 10, title: 'Zona Integritas', value: 80.0, maxValue: 100, unit: '%', status: 'warning', progress: 80.0, isRealtime: false, subtitle: 'Monitoring Raihan Zona Integritas', currentValue: '(4/5)', icon: '🛡️' },
-      { id: 11, title: 'SKM/IKM', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Survey Kepuasan Masyarakat/Indeks Kepuasan...', currentValue: '(4/4)', icon: '📊' },
-      { id: 12, title: 'Inovasi', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Capaian Nilai Inovasi Pengadilan', currentValue: '(3/3)', icon: '💡' },
+  const loadMonitoringData = async () => {
+    setIsLoading(true);
+    try {
+      console.log('Loading real monitoring data from database...');
       
-      // Page 2 - Sistem Pendukung
-      { id: 13, title: 'Pelaporan Kinsatker', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Pelaporan Perkara melalui Kinsatker', currentValue: '(3/3)', icon: '📋' },
-      { id: 14, title: 'Layanan PTSP', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Ketersediaan Layanan PTSP', currentValue: '(2/2)', icon: '🏢' },
-      { id: 15, title: 'IKPA', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Indeks Kinerja Pelaksanaan Anggaran', currentValue: '(6/6)', icon: '✏️' },
-      { id: 16, title: 'Website', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Penilaian Kelengkapan Informasi Website Pengadilan', currentValue: '(3/3)', icon: '🌐' },
-      { id: 17, title: 'Prestasi', value: 75.0, maxValue: 100, unit: '%', status: 'warning', progress: 75.0, isRealtime: false, subtitle: 'Capaian Prestasi Lokal, Provinsi dan Nasional', currentValue: '(3.75/5)', icon: '🏆' },
-      { id: 18, title: 'Validasi Data Simtepa', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Validasi Kelengkapan Data Kepegawaian melalui Simtepa', currentValue: '(3/3)', icon: '✅' },
-      { id: 19, title: 'SIKEP', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Monitoring Kelengkapan Data Kepegawaian melalui Aplikasi...', currentValue: '(3/3)', icon: '👥' },
-      { id: 20, title: 'SKP', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Monitoring Ketersediaan Data Sasaran Kinerja Pegawai', currentValue: '(3/3)', icon: '🎯' },
-      { id: 21, title: 'CCTV', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Monitoring Ketersediaan CCTV Pengadilan', currentValue: '(3/3)', icon: '📹' },
-      { id: 22, title: 'Sipintar', value: 93.3, maxValue: 100, unit: '%', status: 'good', progress: 93.3, isRealtime: true, subtitle: 'Monitoring Kekurangan Pegawai Teknis dalam...', currentValue: '(2.8/3)', icon: '🎓' },
-      { id: 23, title: 'ETR', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Monitoring Kekurangan dalam Melakukan Penilaian...', currentValue: '(3/3)', icon: '⚡' },
-      { id: 24, title: 'LHKPN & LHKASN', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Monitoring Pelaporan Kekayaan', currentValue: '(0/-5)', icon: '💼' },
-      { id: 25, title: 'Kumdis', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Monitoring Data Hukuman Disiplin', currentValue: '(0/-5)', icon: '⚠️' },
-      { id: 26, title: 'LHP oleh Hawasbid', value: 100.0, maxValue: 100, unit: '%', status: 'good', progress: 100.0, isRealtime: true, subtitle: 'Monitoring Data Pengawasan oleh Hawasbid', currentValue: '(3/3)', icon: '🔍' }
-    ];
-    
-    setMonitoringData(mockData);
+      // Load monitoring configs
+      const configResponse = await fetch('/api/monitoring-configs');
+      
+      if (!configResponse.ok) {
+        console.error('Failed to fetch monitoring configs:', configResponse.status, configResponse.statusText);
+        throw new Error(`Config API error: ${configResponse.status}`);
+      }
+      
+      const configs = await configResponse.json();
+      
+      if (!Array.isArray(configs)) {
+        console.error('Monitoring configs is not an array:', configs);
+        throw new Error('Invalid config response format');
+      }
+      
+      console.log(`Loaded ${configs.length} monitoring configs`);
+      console.log('Sample configs:', configs.slice(0, 2).map(c => ({ id: c.id, name: c.monitoring_name })));
+      
+      // Load monitoring data for each config
+      const monitoringDataPromises = configs.map(async (config) => {
+        try {
+          const dataResponse = await fetch(`/api/monitoring-data?monitoring_id=${config.id}`);
+          const data = await dataResponse.json();
+          
+          if (!dataResponse.ok || !Array.isArray(data)) {
+            console.warn(`No data found for system ${config.monitoring_name}`);
+            return null;
+          }
+          
+          // Get the latest data entry (most recent quarter)
+          const sortedData = data.sort((a, b) => {
+            if (a.year !== b.year) return b.year - a.year;
+            return b.quarter - a.quarter;
+          });
+          
+          const latestData = sortedData[0];
+          
+          if (!latestData) {
+            console.warn(`No latest data found for system ${config.monitoring_name}`);
+            return null;
+          }
+          
+          // Parse values from database strings
+          const currentValue = parseFloat(latestData.current_value) || 0;
+          const maxValue = parseFloat(config.max_value) || 100;
+          const percentage = maxValue > 0 ? (currentValue / maxValue) * 100 : 0;
+          
+          // Determine status based on percentage
+          let status: 'good' | 'warning' | 'critical';
+          if (percentage >= 80) {
+            status = 'good';
+          } else if (percentage >= 50) {
+            status = 'warning';
+          } else {
+            status = 'critical';
+          }
+          
+          // Create monitoring data item
+          const monitoringItem: MonitoringData = {
+            id: config.id,
+            title: config.monitoring_name,
+            value: percentage,
+            maxValue: 100, // Display as percentage
+            unit: '%',
+            status: status,
+            progress: percentage,
+            isRealtime: config.is_realtime === 1,
+            subtitle: config.monitoring_description,
+            currentValue: `(${currentValue}/${maxValue})`,
+            icon: config.icon
+          };
+          
+          return monitoringItem;
+          
+        } catch (error) {
+          console.error(`Error loading data for ${config.monitoring_name}:`, error);
+          return null;
+        }
+      });
+      
+      // Wait for all data to load
+      const results = await Promise.all(monitoringDataPromises);
+      
+      // Filter out null results and sort by display order
+      const validData = results
+        .filter((item): item is MonitoringData => item !== null)
+        .sort((a, b) => {
+          const configA = configs.find(c => c.id === a.id);
+          const configB = configs.find(c => c.id === b.id);
+          
+          // Sort by page_number first, then display_order
+          if (configA?.page_number !== configB?.page_number) {
+            return (configA?.page_number || 0) - (configB?.page_number || 0);
+          }
+          return (configA?.display_order || 0) - (configB?.display_order || 0);
+        });
+      
+      // Add hardcoded systems that are not in database (SIPP, Mediasi, Banding, Kasasi & PK)
+      const hardcodedSystems: MonitoringData[] = [
+        { id: 1000, title: 'SIPP', value: 97.5, maxValue: 100, unit: '%', status: 'good', progress: 97.5, isRealtime: true, subtitle: 'Sistem Informasi Penelusuran Perkara', currentValue: '(11.7/12)', icon: '⚖️' },
+        { id: 1001, title: 'Mediasi', value: 39.1, maxValue: 100, unit: '%', status: 'critical', progress: 39.1, isRealtime: true, subtitle: 'Tingkat keberhasilan Mediasi', currentValue: '(3.13/8)', icon: '🤝' },
+        { id: 1002, title: 'Banding', value: 60.0, maxValue: 100, unit: '%', status: 'critical', progress: 60.0, isRealtime: true, subtitle: 'Kecepatan Administrasi Banding', currentValue: '(1.2/2)', icon: '✈️' },
+        { id: 1003, title: 'Kasasi & PK', value: 60.0, maxValue: 100, unit: '%', status: 'critical', progress: 60.0, isRealtime: true, subtitle: 'Kecepatan Administrasi Kasasi', currentValue: '(1.2/2)', icon: '💼' }
+      ];
+      
+      // Separate page 1 and page 2 systems from database
+      const page1Systems = validData.filter(item => {
+        const config = configs.find(c => c.id === item.id);
+        return config?.page_number === 1;
+      });
+      
+      const page2Systems = validData.filter(item => {
+        const config = configs.find(c => c.id === item.id);
+        return config?.page_number === 2;
+      });
+      
+      // Build final data array with proper ordering
+      const finalData: MonitoringData[] = [
+        // Page 1 - Sistem Utama
+        hardcodedSystems[0], // SIPP (position 1)
+        hardcodedSystems[1], // Mediasi (position 2)
+        ...page1Systems.slice(0, 2), // E-Court, Gugatan Mandiri (positions 3-4)
+        hardcodedSystems[2], // Banding (position 5) 
+        hardcodedSystems[3], // Kasasi & PK (position 6)
+        ...page1Systems.slice(2), // Rest of page 1 systems (positions 7+)
+        
+        // Page 2 - Sistem Pendukung
+        ...page2Systems
+      ];
+      
+      console.log(`Loaded ${validData.length} real systems + ${hardcodedSystems.length} hardcoded = ${finalData.length} total systems`);
+      console.log('Page 1 systems:', finalData.slice(0, 12).map(s => s.title));
+      console.log('Page 2 systems:', finalData.slice(12).map(s => s.title));
+      
+      setMonitoringData(finalData);
+      
+    } catch (error) {
+      console.error('Error loading monitoring data:', error);
+      
+      // Fallback to basic mock data on error
+      const fallbackData: MonitoringData[] = [
+        { id: 1, title: 'Sistem Error', value: 0, maxValue: 100, unit: '%', status: 'critical', progress: 0, isRealtime: false, subtitle: 'Gagal memuat data dari database', currentValue: '(0/0)', icon: '❌' }
+      ];
+      
+      setMonitoringData(fallbackData);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLogoClick = () => {
@@ -393,19 +518,33 @@ export default function PublicDashboard() {
           </div>
         </div>
 
-        {/* Monitoring Grid - Page 1 */}
-        <div className={`monitoring-page ${currentPage !== 1 ? 'hidden' : ''}`}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6 items-start">
-            {page1Data.map(renderMonitoringCard)}
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600 text-lg">Memuat data monitoring...</p>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Monitoring Grid - Page 1 */}
+        {!isLoading && (
+          <div className={`monitoring-page ${currentPage !== 1 ? 'hidden' : ''}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6 items-start">
+              {page1Data.map(renderMonitoringCard)}
+            </div>
+          </div>
+        )}
         
         {/* Monitoring Grid - Page 2 */}
-        <div className={`monitoring-page ${currentPage !== 2 ? 'hidden' : ''}`}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6 items-start">
-            {page2Data.map(renderMonitoringCard)}
+        {!isLoading && (
+          <div className={`monitoring-page ${currentPage !== 2 ? 'hidden' : ''}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6 items-start">
+              {page2Data.map(renderMonitoringCard)}
+            </div>
           </div>
-        </div>
+        )}
         
       </main>
 
