@@ -647,9 +647,13 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button 
                           onClick={() => setEditingConfig({...config})}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 cursor-pointer p-2 rounded-lg transition-colors inline-flex items-center space-x-1"
+                          title="Edit konfigurasi"
                         >
-                          Edit
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                          </svg>
+                          <span className="hidden sm:inline">Edit</span>
                         </button>
                       </td>
                     </tr>
@@ -729,9 +733,12 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <button 
                             onClick={() => openManageModal(config.id)}
-                            className="text-green-600 hover:text-green-900"
+                            className="text-green-600 hover:text-green-900 cursor-pointer flex items-center space-x-1 hover:bg-green-50 px-2 py-1 rounded transition-colors"
                           >
-                            Manage
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"></path>
+                            </svg>
+                            <span>Manage</span>
                           </button>
                         </td>
                       </tr>
@@ -1645,9 +1652,24 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                                 target_value: data?.target_value || config?.max_value || 100,
                                 percentage: data?.percentage || 0
                               })}
-                              className="text-blue-600 hover:text-blue-900 mr-3"
+                              className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 cursor-pointer p-2 rounded-lg transition-colors mr-2 inline-flex items-center space-x-1"
+                              title={data ? 'Edit data' : 'Tambah data'}
                             >
-                              {data ? 'Edit' : 'Add'}
+                              {data ? (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                  </svg>
+                                  <span className="hidden sm:inline">Edit</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                  </svg>
+                                  <span className="hidden sm:inline">Add</span>
+                                </>
+                              )}
                             </button>
                             {data && (
                               <button 
@@ -1656,9 +1678,13 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                                     deleteDataEntry(data.id!);
                                   }
                                 }}
-                                className="text-red-600 hover:text-red-900"
+                                className="text-red-600 hover:text-red-900 hover:bg-red-50 cursor-pointer p-2 rounded-lg transition-colors inline-flex items-center space-x-1"
+                                title="Hapus data"
                               >
-                                Delete
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                                <span className="hidden sm:inline">Delete</span>
                               </button>
                             )}
                           </td>
@@ -1691,7 +1717,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                       });
                     }}
                     disabled={managingSystemData.length >= 4}
-                    className="px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
                     Tambah Data Triwulan
                   </button>
@@ -1702,7 +1728,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                       setManagingSystemData([]);
                       setManageModalTab('data');
                     }}
-                    className="px-3 py-2 bg-gray-100 text-gray-700 text-xs rounded-lg hover:bg-gray-200"
+                    className="px-3 py-2 bg-gray-100 text-gray-700 text-xs rounded-lg hover:bg-gray-200 cursor-pointer"
                   >
                     Tutup
                   </button>
