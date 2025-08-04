@@ -120,9 +120,10 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
   useEffect(() => {
     if (managingSystemId && manageModalTab === 'analytics') {
       // Load all data for the system when in analytics mode
+      console.log('Loading analytics data for system:', managingSystemId);
       loadAllSystemData(managingSystemId);
     }
-  }, [managingSystemId, manageModalTab]);
+  }, [managingSystemId, manageModalTab, analyticsViewType]);
 
   // Set default analytics year when data is loaded
   useEffect(() => {
@@ -307,9 +308,23 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
       const response = await fetch(`/api/monitoring-data?monitoring_id=${systemId}`);
       const data = await response.json();
       console.log('All system data response:', data);
+      console.log('Data length:', Array.isArray(data) ? data.length : typeof data);
       
       if (response.ok) {
-        setManagingSystemData(data);
+        // Ensure data is an array and filter out invalid entries
+        const validData = Array.isArray(data) ? data.filter(item => 
+          item && 
+          item.current_value !== null && 
+          item.current_value !== undefined &&
+          !isNaN(parseFloat(item.current_value)) &&
+          item.year && 
+          item.quarter
+        ) : [];
+        
+        console.log('Valid data entries:', validData.length);
+        console.log('Sample data:', validData.slice(0, 2));
+        
+        setManagingSystemData(validData);
       } else {
         console.error('Failed to load all system data:', data);
         error('Gagal memuat data sistem');
@@ -1568,9 +1583,12 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                 </button>
                 <button
                   onClick={() => {
+                    console.log('Switching to analytics tab for system:', managingSystemId);
                     setManageModalTab('analytics');
                     if (managingSystemId) {
-                      loadAllSystemData(managingSystemId);
+                      // Force reload data when switching to analytics
+                      setManagingSystemData([]); // Clear existing data first
+                      setTimeout(() => loadAllSystemData(managingSystemId), 100); // Small delay to ensure state is cleared
                     }
                   }}
                   className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1748,11 +1766,21 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                       ? managingSystemData.filter(d => d.year === selectedAnalyticsYear)
                       : managingSystemData;
                     
-                    if (!config || filteredData.length === 0) {
+                    if (!config) {
+                      return (
+                        <div className="text-center py-12 text-gray-500">
+                          <p className="text-sm">Konfigurasi tidak ditemukan</p>
+                        </div>
+                      );
+                    }
+                    
+                    if (filteredData.length === 0) {
                       return (
                         <div className="text-center py-12 text-gray-500">
                           <p className="text-sm">Data tidak tersedia</p>
                           <p className="text-xs">Total data: {managingSystemData.length || 0}</p>
+                          <p className="text-xs">Filtered: {filteredData.length}</p>
+                          <p className="text-xs">View: {analyticsViewType}, Year: {selectedAnalyticsYear}</p>
                         </div>
                       );
                     }
@@ -1761,6 +1789,8 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                     let displayValue = 0;
                     let displayPercentage = 0;
                     let latestData = null;
+                    let avgValue = 0;
+                    let avgPercentage = 0;
                     
                     try {
                       // Always get the latest data (most recent quarter from any year)
@@ -1769,35 +1799,81 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                         return b.quarter - a.quarter;
                       });
                       
-                      if (latestData && typeof latestData.current_value === 'number') {
-                        displayValue = latestData.current_value;
-                        displayPercentage = config.max_value > 0 
-                          ? (latestData.current_value / config.max_value) * 100 
+                      latestData = sortedData[0];
+                      
+                      console.log('Analytics Debug:', {
+                        filteredData,
+                        sortedData,
+                        latestData,
+                        config,
+                        analyticsViewType,
+                        selectedAnalyticsYear,
+                        'managingSystemData.length': managingSystemData.length,
+                        'filteredData.length': filteredData.length
+                      });
+                      
+                      if (latestData && latestData.current_value !== null && latestData.current_value !== undefined) {
+                        // Parse values as numbers since they come from database as strings
+                        const currentValue = typeof latestData.current_value === 'string' 
+                          ? parseFloat(latestData.current_value) 
+                          : latestData.current_value;
+                        const maxValue = typeof config.max_value === 'string' 
+                          ? parseFloat(config.max_value) 
+                          : config.max_value;
+                        
+                        displayValue = currentValue;
+                        displayPercentage = maxValue > 0 
+                          ? (currentValue / maxValue) * 100 
                           : 0;
+                        
+                        console.log('Calculated values:', {
+                          displayValue,
+                          displayPercentage,
+                          'latestData.current_value': latestData.current_value,
+                          'parsed currentValue': currentValue,
+                          'config.max_value': config.max_value,
+                          'parsed maxValue': maxValue
+                        });
+                      } else {
+                        console.log('No valid latest data found:', {
+                          latestData,
+                          'latestData?.current_value': latestData?.current_value,
+                          'typeof current_value': typeof latestData?.current_value
+                        });
                       }
                       
                       // For all data view, also calculate average for comparison
-                      let avgValue = 0;
-                      let avgPercentage = 0;
-                      
                       if (analyticsViewType === 'all') {
                         const validData = filteredData.filter(d => 
                           d && 
-                          typeof d.current_value === 'number' && 
                           d.current_value !== null && 
-                          !isNaN(d.current_value)
+                          d.current_value !== undefined &&
+                          !isNaN(parseFloat(d.current_value))
                         );
                         
                         if (validData.length > 0) {
-                          avgValue = validData.reduce((sum, d) => sum + d.current_value, 0) / validData.length;
-                          avgPercentage = config.max_value > 0 
-                            ? (avgValue / config.max_value) * 100 
+                          const maxValue = typeof config.max_value === 'string' 
+                            ? parseFloat(config.max_value) 
+                            : config.max_value;
+                          
+                          avgValue = validData.reduce((sum, d) => {
+                            const currentValue = typeof d.current_value === 'string' 
+                              ? parseFloat(d.current_value) 
+                              : d.current_value;
+                            return sum + currentValue;
+                          }, 0) / validData.length;
+                          
+                          avgPercentage = maxValue > 0 
+                            ? (avgValue / maxValue) * 100 
                             : 0;
                         }
                       }
                     } catch (error) {
+                      console.error('Error calculating analytics values:', error);
                       displayValue = 0;
                       displayPercentage = 0;
+                      avgValue = 0;
+                      avgPercentage = 0;
                     }
                     
                     const statusInfo = getStatusFromPercentage(displayPercentage || 0);
