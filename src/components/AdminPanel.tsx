@@ -1740,75 +1740,75 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
               {/* Analytics Tab */}
               {manageModalTab === 'analytics' && (
                 <div className="space-y-6">
-                  {/* Performance Overview */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="text-sm font-medium text-gray-700 mb-3">Informasi Kinerja</h4>
-                      {(() => {
-                        const config = monitoringConfigs.find(c => c.id === managingSystemId);
-                        
-                        // Filter data based on analytics view type
-                        const filteredData = analyticsViewType === 'yearly' 
-                          ? managingSystemData.filter(d => d.year === selectedAnalyticsYear)
-                          : managingSystemData;
-                        
-                        if (!config || filteredData.length === 0) {
-                          return (
-                            <div className="text-center py-8 text-gray-500">
-                              <p className="text-sm">Data tidak tersedia</p>
-                              <p className="text-xs">Total data: {managingSystemData.length || 0}</p>
-                            </div>
-                          );
-                        }
+                  {(() => {
+                    const config = monitoringConfigs.find(c => c.id === managingSystemId);
+                    
+                    // Filter data based on analytics view type
+                    const filteredData = analyticsViewType === 'yearly' 
+                      ? managingSystemData.filter(d => d.year === selectedAnalyticsYear)
+                      : managingSystemData;
+                    
+                    if (!config || filteredData.length === 0) {
+                      return (
+                        <div className="text-center py-12 text-gray-500">
+                          <p className="text-sm">Data tidak tersedia</p>
+                          <p className="text-xs">Total data: {managingSystemData.length || 0}</p>
+                        </div>
+                      );
+                    }
 
-                        // Calculate values based on view type
-                        let displayValue = 0;
-                        let displayPercentage = 0;
+                    // Calculate values based on view type
+                    let displayValue = 0;
+                    let displayPercentage = 0;
+                    let latestData = null;
+                    
+                    try {
+                      // Always get the latest data (most recent quarter from any year)
+                      const sortedData = [...filteredData].sort((a, b) => {
+                        if (a.year !== b.year) return b.year - a.year;
+                        return b.quarter - a.quarter;
+                      });
+                      
+                      if (latestData && typeof latestData.current_value === 'number') {
+                        displayValue = latestData.current_value;
+                        displayPercentage = config.max_value > 0 
+                          ? (latestData.current_value / config.max_value) * 100 
+                          : 0;
+                      }
+                      
+                      // For all data view, also calculate average for comparison
+                      let avgValue = 0;
+                      let avgPercentage = 0;
+                      
+                      if (analyticsViewType === 'all') {
+                        const validData = filteredData.filter(d => 
+                          d && 
+                          typeof d.current_value === 'number' && 
+                          d.current_value !== null && 
+                          !isNaN(d.current_value)
+                        );
                         
-                        try {
-                          // Always get the latest data (most recent quarter from any year)
-                          const sortedData = [...filteredData].sort((a, b) => {
-                            if (a.year !== b.year) return b.year - a.year;
-                            return b.quarter - a.quarter;
-                          });
-                          
-                          const latestData = sortedData[0];
-                          
-                          if (latestData && typeof latestData.current_value === 'number') {
-                            displayValue = latestData.current_value;
-                            displayPercentage = config.max_value > 0 
-                              ? (latestData.current_value / config.max_value) * 100 
-                              : 0;
-                          }
-                          
-                          // For all data view, also calculate average for comparison
-                          let avgValue = 0;
-                          let avgPercentage = 0;
-                          
-                          if (analyticsViewType === 'all') {
-                            const validData = filteredData.filter(d => 
-                              d && 
-                              typeof d.current_value === 'number' && 
-                              d.current_value !== null && 
-                              !isNaN(d.current_value)
-                            );
-                            
-                            if (validData.length > 0) {
-                              avgValue = validData.reduce((sum, d) => sum + d.current_value, 0) / validData.length;
-                              avgPercentage = config.max_value > 0 
-                                ? (avgValue / config.max_value) * 100 
-                                : 0;
-                            }
-                          }
-                        } catch (error) {
-                          displayValue = 0;
-                          displayPercentage = 0;
+                        if (validData.length > 0) {
+                          avgValue = validData.reduce((sum, d) => sum + d.current_value, 0) / validData.length;
+                          avgPercentage = config.max_value > 0 
+                            ? (avgValue / config.max_value) * 100 
+                            : 0;
                         }
-                        
-                        const statusInfo = getStatusFromPercentage(displayPercentage || 0);
-                        const trendInfo = getTrendFromData(filteredData || []);
+                      }
+                    } catch (error) {
+                      displayValue = 0;
+                      displayPercentage = 0;
+                    }
+                    
+                    const statusInfo = getStatusFromPercentage(displayPercentage || 0);
+                    const trendInfo = getTrendFromData(filteredData || []);
 
-                        return (
+                    return (
+                      <>
+                      {/* Performance Overview */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="text-sm font-medium text-gray-700 mb-3">Informasi Kinerja</h4>
                           <div className="space-y-3">
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-600">Nilai Terbaru:</span>
@@ -1874,39 +1874,15 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                               </div>
                             )}
                           </div>
-                        );
-                      })()}
-                    </div>
+                        </div>
 
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="text-sm font-medium text-gray-700 mb-3">Status Sistem</h4>
-                      {(() => {
-                        const config = monitoringConfigs.find(c => c.id === managingSystemId);
-                        
-                        // Filter data based on analytics view type
-                        const filteredData = analyticsViewType === 'yearly' 
-                          ? managingSystemData.filter(d => d.year === selectedAnalyticsYear)
-                          : managingSystemData;
-                        
-                        if (!config || filteredData.length === 0) {
-                          return (
-                            <div className="text-center py-8 text-gray-500">
-                              <p className="text-sm">Data tidak tersedia</p>
-                            </div>
-                          );
-                        }
-
-                        // Use the latest data for status calculation (same as Informasi Kinerja)
-                        let statusPercentage = displayPercentage || 0;
-                        
-                        const statusInfo = getStatusFromPercentage(statusPercentage || 0);
-
-                        return (
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="text-sm font-medium text-gray-700 mb-3">Status Sistem</h4>
                           <div className="text-center">
                             <div className={`inline-flex items-center px-3 py-2 rounded-full text-sm font-medium ${statusInfo.bg} ${statusInfo.color}`}>
                               <div className={`w-2 h-2 rounded-full mr-2 ${
-                                (statusPercentage || 0) >= 80 ? 'bg-green-500' : 
-                                (statusPercentage || 0) >= 50 ? 'bg-orange-500' : 'bg-red-500'
+                                (displayPercentage || 0) >= 80 ? 'bg-green-500' : 
+                                (displayPercentage || 0) >= 50 ? 'bg-orange-500' : 'bg-red-500'
                               }`}></div>
                               {statusInfo.status}
                             </div>
@@ -1914,17 +1890,15 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                               Status berdasarkan data terbaru
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
-                              {(statusPercentage || 0) >= 80 ? 'Sistem berjalan dengan baik' :
-                               (statusPercentage || 0) >= 50 ? 'Perlu perhatian khusus' : 'Memerlukan tindakan segera'}
+                              {(displayPercentage || 0) >= 80 ? 'Sistem berjalan dengan baik' :
+                               (displayPercentage || 0) >= 50 ? 'Perlu perhatian khusus' : 'Memerlukan tindakan segera'}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              Triwulan terbaru: {(statusPercentage || 0).toFixed(1)}%
+                              Triwulan terbaru: {(displayPercentage || 0).toFixed(1)}%
                             </p>
                           </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
+                        </div>
+                      </div>
 
                   {/* Quarterly Performance Chart */}
                   <div className="bg-gray-50 p-4 rounded-lg">
@@ -2106,6 +2080,9 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                       </div>
                     )}
                   </div>
+                  </>
+                    );
+                  })()}
                 </div>
               )}
             </div>
