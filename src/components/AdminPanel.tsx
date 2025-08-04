@@ -1766,22 +1766,26 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                         let displayPercentage = 0;
                         
                         try {
-                          if (analyticsViewType === 'yearly') {
-                            // Get latest data from selected year
-                            const sortedData = [...filteredData].sort((a, b) => {
-                              if (a.year !== b.year) return b.year - a.year;
-                              return b.quarter - a.quarter;
-                            });
-                            const latestData = sortedData[0];
-                            
-                            if (latestData && typeof latestData.current_value === 'number') {
-                              displayValue = latestData.current_value;
-                              displayPercentage = config.max_value > 0 
-                                ? (latestData.current_value / config.max_value) * 100 
-                                : 0;
-                            }
-                          } else {
-                            // Calculate average for all data
+                          // Always get the latest data (most recent quarter from any year)
+                          const sortedData = [...filteredData].sort((a, b) => {
+                            if (a.year !== b.year) return b.year - a.year;
+                            return b.quarter - a.quarter;
+                          });
+                          
+                          const latestData = sortedData[0];
+                          
+                          if (latestData && typeof latestData.current_value === 'number') {
+                            displayValue = latestData.current_value;
+                            displayPercentage = config.max_value > 0 
+                              ? (latestData.current_value / config.max_value) * 100 
+                              : 0;
+                          }
+                          
+                          // For all data view, also calculate average for comparison
+                          let avgValue = 0;
+                          let avgPercentage = 0;
+                          
+                          if (analyticsViewType === 'all') {
                             const validData = filteredData.filter(d => 
                               d && 
                               typeof d.current_value === 'number' && 
@@ -1790,9 +1794,9 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                             );
                             
                             if (validData.length > 0) {
-                              displayValue = validData.reduce((sum, d) => sum + d.current_value, 0) / validData.length;
-                              displayPercentage = config.max_value > 0 
-                                ? (displayValue / config.max_value) * 100 
+                              avgValue = validData.reduce((sum, d) => sum + d.current_value, 0) / validData.length;
+                              avgPercentage = config.max_value > 0 
+                                ? (avgValue / config.max_value) * 100 
                                 : 0;
                             }
                           }
@@ -1807,9 +1811,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                         return (
                           <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">
-                                {analyticsViewType === 'yearly' ? 'Nilai Terbaru:' : 'Rata-rata Nilai:'}
-                              </span>
+                              <span className="text-sm text-gray-600">Nilai Terbaru:</span>
                               <span className="text-sm font-medium">
                                 {displayValue !== null && displayValue !== undefined 
                                   ? `${displayValue.toFixed(2)} ${config.unit}` 
@@ -1822,9 +1824,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                               <span className="text-sm font-medium">{config.max_value} {config.unit}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">
-                                {analyticsViewType === 'yearly' ? 'Persentase:' : 'Rata-rata %:'}
-                              </span>
+                              <span className="text-sm text-gray-600">Persentase Terbaru:</span>
                               <span className="text-sm font-medium">
                                 {displayPercentage !== null && displayPercentage !== undefined 
                                   ? `${displayPercentage.toFixed(1)}%`
@@ -1832,14 +1832,45 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                                 }
                               </span>
                             </div>
+                            {analyticsViewType === 'all' && avgValue > 0 && (
+                              <>
+                                <div className="border-t pt-2 mt-2">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Rata-rata Nilai:</span>
+                                    <span className="text-sm font-medium text-blue-600">
+                                      {avgValue.toFixed(2)} {config.unit}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-gray-600">Rata-rata %:</span>
+                                    <span className="text-sm font-medium text-blue-600">
+                                      {avgPercentage.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
                             <div className="flex justify-between items-center">
                               <span className="text-sm text-gray-600">Trend:</span>
                               <span className={`text-sm font-medium ${trendInfo.color}`}>{trendInfo.trend}</span>
                             </div>
-                            {analyticsViewType === 'all' && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">
+                                {analyticsViewType === 'yearly' ? 'Periode Data:' : 'Total Periode:'}
+                              </span>
+                              <span className="text-sm font-medium">
+                                {analyticsViewType === 'yearly' 
+                                  ? `${selectedAnalyticsYear} (${filteredData.length} triwulan)`
+                                  : `${filteredData.length} triwulan keseluruhan`
+                                }
+                              </span>
+                            </div>
+                            {latestData && (
                               <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-600">Total Periode:</span>
-                                <span className="text-sm font-medium">{filteredData.length} triwulan</span>
+                                <span className="text-sm text-gray-600">Triwulan Terbaru:</span>
+                                <span className="text-sm font-medium text-green-600">
+                                  {latestData.year} T{latestData.quarter}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -1865,38 +1896,8 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                           );
                         }
 
-                        // Use same calculation logic as Informasi Kinerja
-                        let statusPercentage = 0;
-                        
-                        try {
-                          if (analyticsViewType === 'yearly') {
-                            // Get latest data from selected year
-                            const sortedData = [...filteredData].sort((a, b) => {
-                              if (a.year !== b.year) return b.year - a.year;
-                              return b.quarter - a.quarter;
-                            });
-                            const latestData = sortedData[0];
-                            
-                            if (latestData && typeof latestData.current_value === 'number' && config.max_value > 0) {
-                              statusPercentage = (latestData.current_value / config.max_value) * 100;
-                            }
-                          } else {
-                            // Calculate average for all data
-                            const validData = filteredData.filter(d => 
-                              d && 
-                              typeof d.current_value === 'number' && 
-                              d.current_value !== null && 
-                              !isNaN(d.current_value)
-                            );
-                            
-                            if (validData.length > 0 && config.max_value > 0) {
-                              const avgValue = validData.reduce((sum, d) => sum + d.current_value, 0) / validData.length;
-                              statusPercentage = (avgValue / config.max_value) * 100;
-                            }
-                          }
-                        } catch (error) {
-                          statusPercentage = 0;
-                        }
+                        // Use the latest data for status calculation (same as Informasi Kinerja)
+                        let statusPercentage = displayPercentage || 0;
                         
                         const statusInfo = getStatusFromPercentage(statusPercentage || 0);
 
@@ -1910,14 +1911,14 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                               {statusInfo.status}
                             </div>
                             <p className="text-xs text-gray-500 mt-2">
-                              {analyticsViewType === 'yearly' ? 'Status terbaru tahun ini' : 'Status rata-rata keseluruhan'}
+                              Status berdasarkan data terbaru
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
                               {(statusPercentage || 0) >= 80 ? 'Sistem berjalan dengan baik' :
                                (statusPercentage || 0) >= 50 ? 'Perlu perhatian khusus' : 'Memerlukan tindakan segera'}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              Berdasarkan {analyticsViewType === 'yearly' ? 'data terbaru' : 'rata-rata keseluruhan'}: {(statusPercentage || 0).toFixed(1)}%
+                              Triwulan terbaru: {(statusPercentage || 0).toFixed(1)}%
                             </p>
                           </div>
                         );
