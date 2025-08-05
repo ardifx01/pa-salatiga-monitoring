@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
 interface MonitoringData {
   id: number;
@@ -28,80 +28,64 @@ interface AppSettings {
   auto_slide_enabled: boolean;
 }
 
+// Loading Skeleton Component
+const LoadingSkeleton = () => (
+  <div className="bg-white rounded-xl shadow-sm border-2 p-4 animate-pulse">
+    <div className="flex items-start justify-between mb-3">
+      <div className="flex items-center space-x-2">
+        <div className="w-5 h-5 bg-gray-200 rounded"></div>
+        <div className="flex items-center space-x-1">
+          <div className="w-2 h-2 bg-gray-200 rounded-full"></div>
+          <div className="w-20 h-4 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+      <div className="w-4 h-4 bg-gray-200 rounded"></div>
+    </div>
+    <div className="mb-3">
+      <div className="w-16 h-8 bg-gray-200 rounded mb-1"></div>
+      <div className="w-12 h-3 bg-gray-200 rounded"></div>
+    </div>
+    <div className="mb-3">
+      <div className="w-full h-8 bg-gray-200 rounded"></div>
+    </div>
+    <div className="w-full h-2.5 bg-gray-200 rounded-full"></div>
+  </div>
+);
+
+// Constants
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_SETTINGS: AppSettings = {
+  app_name: 'Smartvinesa v.13',
+  institution_name: 'PA Salatiga',
+  app_description: 'Smart View Kinerja Satker PA Salatiga',
+  update_interval: 5,
+  slide_duration: 5,
+  notification_email: '',
+  auto_update_enabled: true,
+  email_notifications_enabled: true,
+  auto_slide_enabled: true
+};
+
 export default function PublicDashboard() {
+  // State management
   const [currentPage, setCurrentPage] = useState(1);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [monitoringData, setMonitoringData] = useState<MonitoringData[]>([]);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [slideProgress, setSlideProgress] = useState(0);
   const [adminClickCount, setAdminClickCount] = useState(0);
-  const [settings, setSettings] = useState<AppSettings>({
-    app_name: 'Smartvinesa v.13',
-    institution_name: 'PA Salatiga',
-    app_description: 'Smart View Kinerja Satker PA Salatiga',
-    update_interval: 5,
-    slide_duration: 5,
-    notification_email: '',
-    auto_update_enabled: true,
-    email_notifications_enabled: true,
-    auto_slide_enabled: true
-  });
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedSystem, setSelectedSystem] = useState<MonitoringData | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [systemDetailData, setSystemDetailData] = useState<any[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [dataCache, setDataCache] = useState<Map<number, { data: any[], timestamp: number }>>(new Map());
+  const [showModal, setShowModal] = useState(false);
 
-  useEffect(() => {
-    const initializeData = async () => {
-      await loadSettings();
-      await loadMonitoringData();
-    };
-    
-    initializeData();
-  }, []);
-
-  // Auto-refresh data based on settings
-  useEffect(() => {
-    if (!settings.auto_update_enabled) return;
-    
-    const updateInterval = setInterval(() => {
-      console.log('Auto-refreshing monitoring data...');
-      loadMonitoringData();
-      setLastUpdate(new Date());
-    }, settings.update_interval * 60 * 1000);
-
-    return () => clearInterval(updateInterval);
-  }, [settings.auto_update_enabled, settings.update_interval]);
-
-  useEffect(() => {
-    // Auto slide between pages based on settings
-    if (!settings.auto_slide_enabled) {
-      setSlideProgress(0);
-      return;
-    }
-    
-    const slideDuration = settings.slide_duration * 1000; // Convert to milliseconds
-    let startTime = Date.now();
-    
-    // Progress bar animation
-    const progressInterval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const progress = (elapsed / slideDuration) * 100;
-      setSlideProgress(Math.min(progress, 100));
-    }, 50);
-    
-    // Page transition
-    const slideInterval = setInterval(() => {
-      setCurrentPage(prev => prev === 1 ? 2 : 1);
-      setSlideProgress(0);
-      startTime = Date.now();
-    }, slideDuration);
-
-    return () => {
-      clearInterval(slideInterval);
-      clearInterval(progressInterval);
-    };
-  }, [settings.auto_slide_enabled, settings.slide_duration]);
-
-
-  const loadSettings = async () => {
+  // Move function definitions first
+  // Optimized functions with useCallback
+  const loadSettings = useCallback(async () => {
     try {
       const response = await fetch('/api/settings');
       if (response.ok) {
@@ -111,31 +95,24 @@ export default function PublicDashboard() {
     } catch (error) {
       console.error('Error loading settings:', error);
     }
-  };
+  }, []);
 
-  const loadMonitoringData = async () => {
+  const loadMonitoringData = useCallback(async () => {
     setIsLoading(true);
     try {
-      console.log('Loading real monitoring data from database...');
-      
       // Load monitoring configs
       const configResponse = await fetch('/api/monitoring-configs');
       
       if (!configResponse.ok) {
-        console.error('Failed to fetch monitoring configs:', configResponse.status, configResponse.statusText);
         throw new Error(`Config API error: ${configResponse.status}`);
       }
       
       const configs = await configResponse.json();
       
       if (!Array.isArray(configs)) {
-        console.error('Monitoring configs is not an array:', configs);
         throw new Error('Invalid config response format');
       }
-      
-      console.log(`Loaded ${configs.length} monitoring configs`);
-      console.log('Sample configs:', configs.slice(0, 2).map(c => ({ id: c.id, name: c.monitoring_name })));
-      
+
       // Load monitoring data for each config
       const monitoringDataPromises = configs.map(async (config) => {
         try {
@@ -160,10 +137,10 @@ export default function PublicDashboard() {
             return null;
           }
           
-          // Parse values from database strings
-          const currentValue = parseFloat(latestData.current_value) || 0;
-          const maxValue = parseFloat(config.max_value) || 100;
-          const percentage = maxValue > 0 ? (currentValue / maxValue) * 100 : 0;
+          // Parse values from database strings with NaN protection
+          const currentValue = !isNaN(parseFloat(latestData.current_value)) ? parseFloat(latestData.current_value) : 0;
+          const maxValue = !isNaN(parseFloat(config.max_value)) && parseFloat(config.max_value) > 0 ? parseFloat(config.max_value) : 100;
+          const percentage = Math.min(Math.max((currentValue / maxValue) * 100, 0), 100); // Clamp between 0-100
           
           // Determine status based on percentage
           let status: 'good' | 'warning' | 'critical';
@@ -248,10 +225,6 @@ export default function PublicDashboard() {
         ...page2Systems
       ];
       
-      console.log(`Loaded ${validData.length} real systems + ${hardcodedSystems.length} hardcoded = ${finalData.length} total systems`);
-      console.log('Page 1 systems:', finalData.slice(0, 12).map(s => s.title));
-      console.log('Page 2 systems:', finalData.slice(12).map(s => s.title));
-      
       setMonitoringData(finalData);
       
     } catch (error) {
@@ -266,7 +239,219 @@ export default function PublicDashboard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const initializeData = async () => {
+      await loadSettings();
+      await loadMonitoringData();
+    };
+    
+    initializeData();
+  }, [loadSettings, loadMonitoringData]);
+
+  // Auto-refresh data based on settings
+  useEffect(() => {
+    if (!settings.auto_update_enabled) return;
+    
+    const updateInterval = setInterval(() => {
+      loadMonitoringData();
+      setLastUpdate(new Date());
+    }, settings.update_interval * 60 * 1000);
+
+    return () => clearInterval(updateInterval);
+  }, [settings.auto_update_enabled, settings.update_interval]);
+
+  // Preload data for page 1 systems to improve modal performance
+  useEffect(() => {
+    if (monitoringData.length > 0 && !isLoading) {
+      const preloadSystems = async () => {
+        // Get first 6 real systems (ID < 1000) from page 1 for preloading
+        const page1RealSystems = monitoringData.slice(0, 12).filter(item => item.id < 1000).slice(0, 6);
+        
+        for (const system of page1RealSystems) {
+          const cacheKey = system.id;
+          const cached = dataCache.get(cacheKey);
+          const cacheValidDuration = 5 * 60 * 1000; // 5 minutes
+          
+          // Only preload if not cached or cache is old
+          if (!cached || (Date.now() - cached.timestamp >= cacheValidDuration)) {
+            try {
+              const response = await fetch(`/api/monitoring-data?monitoring_id=${system.id}`);
+              if (response.ok) {
+                const data = await response.json();
+                const sortedData = data.sort((a: any, b: any) => {
+                  if (a.year !== b.year) return a.year - b.year;
+                  return a.quarter - b.quarter;
+                });
+                
+                const last7Data = sortedData.slice(-7);
+                
+                // Cache the preloaded data
+                const newCache = new Map(dataCache);
+                newCache.set(cacheKey, {
+                  data: last7Data,
+                  timestamp: Date.now()
+                });
+                setDataCache(newCache);
+              }
+            } catch (error) {
+              console.warn(`Failed to preload data for system ${system.title}:`, error);
+            }
+            
+            // Add small delay between requests to avoid overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+      };
+      
+      // Start preloading after a short delay to not interfere with initial loading
+      setTimeout(preloadSystems, 2000);
+    }
+  }, [monitoringData, isLoading, dataCache]);
+
+  // Clean up old cache entries every 10 minutes
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const cacheValidDuration = 5 * 60 * 1000; // 5 minutes
+      const newCache = new Map();
+      
+      for (const [key, value] of dataCache.entries()) {
+        if (Date.now() - value.timestamp < cacheValidDuration) {
+          newCache.set(key, value);
+        }
+      }
+      
+      if (newCache.size !== dataCache.size) {
+        setDataCache(newCache);
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, [dataCache]);
+
+  useEffect(() => {
+    // Auto slide between pages based on settings
+    if (!settings.auto_slide_enabled) {
+      setSlideProgress(0);
+      return;
+    }
+    
+    const slideDuration = settings.slide_duration * 1000; // Convert to milliseconds
+    let startTime = Date.now();
+    
+    // Progress bar animation
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = (elapsed / slideDuration) * 100;
+      setSlideProgress(Math.min(progress, 100));
+    }, 50);
+    
+    // Page transition
+    const slideInterval = setInterval(() => {
+      setCurrentPage(prev => prev === 1 ? 2 : 1);
+      setSlideProgress(0);
+      startTime = Date.now();
+    }, slideDuration);
+
+    return () => {
+      clearInterval(slideInterval);
+      clearInterval(progressInterval);
+    };
+  }, [settings.auto_slide_enabled, settings.slide_duration]);
+
+  const loadSystemDetailData = useCallback(async (systemId: number) => {
+    setModalLoading(true);
+    
+    // Check cache first
+    const cacheKey = systemId;
+    const cached = dataCache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+      setSystemDetailData(cached.data);
+      setModalLoading(false);
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/monitoring-data?monitoring_id=${systemId}`);
+      if (response.ok) {
+        const data = await response.json();
+        // Get last 7 data points for chart (approximately 7 quarters)
+        const sortedData = data.sort((a: any, b: any) => {
+          if (a.year !== b.year) return a.year - b.year;
+          return a.quarter - b.quarter;
+        });
+        
+        const last7Data = sortedData.slice(-7);
+        
+        // Cache the data
+        const newCache = new Map(dataCache);
+        newCache.set(cacheKey, {
+          data: last7Data,
+          timestamp: Date.now()
+        });
+        setDataCache(newCache);
+        
+        setSystemDetailData(last7Data);
+      } else {
+        console.error('Failed to load system detail data');
+        setSystemDetailData([]);
+      }
+    } catch (error) {
+      console.error('Error loading system detail data:', error);
+      setSystemDetailData([]);
+    } finally {
+      setModalLoading(false);
+    }
+  }, [dataCache]);
+
+  const handleCardClick = useCallback(async (item: MonitoringData) => {
+    setSelectedSystem(item);
+    setShowModal(true);
+    
+    // Load detail data for real systems (not hardcoded ones)
+    if (item.id < 1000) {
+      await loadSystemDetailData(item.id);
+    } else {
+      // For hardcoded systems, create mock trend data
+      const mockData = Array.from({ length: 7 }, (_, index) => ({
+        year: 2025,
+        quarter: Math.max(1, (index % 4) + 1),
+        current_value: Math.max(item.value + ((index % 3) - 1) * 2, 0), // Ensure no negative values
+        percentage: Math.max(item.value + ((index % 3) - 1) * 2, 0)
+      }));
+      setSystemDetailData(mockData);
+      setModalLoading(false);
+    }
+  }, [loadSystemDetailData]);
+
+  const closeModal = useCallback(() => {
+    setShowModal(false);
+    setTimeout(() => {
+      setSelectedSystem(null);
+      setSystemDetailData([]);
+    }, 300); // Wait for animation to complete
+  }, []);
+
+  const getTrendInfo = useCallback((data: any[]) => {
+    if (data.length < 2) return { trend: 'Stabil', color: 'text-gray-600' };
+    
+    const latest = data[data.length - 1];
+    const previous = data[data.length - 2];
+    
+    const latestValue = !isNaN(parseFloat(latest.current_value)) ? parseFloat(latest.current_value) : (latest.percentage || 0);
+    const previousValue = !isNaN(parseFloat(previous.current_value)) ? parseFloat(previous.current_value) : (previous.percentage || 0);
+    
+    if (latestValue > previousValue) {
+      return { trend: 'Naik', color: 'text-green-600' };
+    } else if (latestValue < previousValue) {
+      return { trend: 'Turun', color: 'text-red-600' };
+    } else {
+      return { trend: 'Stabil', color: 'text-gray-600' };
+    }
+  }, []);
 
   const handleLogoClick = () => {
     setAdminClickCount(prev => prev + 1);
@@ -282,39 +467,55 @@ export default function PublicDashboard() {
     }
   };
 
-  const page1Data = monitoringData.slice(0, 12);
-  const page2Data = monitoringData.slice(12, 26);
-  
-  const totalSystems = monitoringData.length;
-  const overallPercentage = Math.round(monitoringData.reduce((acc, item) => acc + item.progress, 0) / totalSystems);
-  const notMaximalCount = monitoringData.filter(item => item.progress < 80).length;
-  const criticalCount = monitoringData.filter(item => item.status === 'critical').length;
+  // Memoized computations for better performance
+  const { page1Data, page2Data, totalSystems, overallPercentage, notMaximalCount, criticalCount } = useMemo(() => {
+    const page1 = monitoringData.slice(0, 12);
+    const page2 = monitoringData.slice(12, 26);
+    const total = monitoringData.length;
+    const overall = total > 0 ? Math.round(monitoringData.reduce((acc, item) => acc + (isNaN(item.progress) ? 0 : item.progress), 0) / total) : 0;
+    const notMaximal = monitoringData.filter(item => item.progress < 80).length;
+    const critical = monitoringData.filter(item => item.status === 'critical').length;
+    
+    return {
+      page1Data: page1,
+      page2Data: page2,
+      totalSystems: total,
+      overallPercentage: overall,
+      notMaximalCount: notMaximal,
+      criticalCount: critical
+    };
+  }, [monitoringData]);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'good': return 'text-green-600 bg-green-100';
       case 'warning': return 'text-yellow-600 bg-yellow-100'; 
       case 'critical': return 'text-red-600 bg-red-100';
       default: return 'text-gray-600 bg-gray-100';
     }
-  };
+  }, []);
 
-  const getProgressColor = (status: string) => {
+  const getProgressColor = useCallback((status: string) => {
     switch (status) {
       case 'good': return 'bg-green-500';
       case 'warning': return 'bg-yellow-500';
       case 'critical': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
-  };
+  }, []);
 
-  const renderMonitoringCard = (item: MonitoringData) => (
-    <div key={item.id} className={`
-      bg-white rounded-xl shadow-sm border-2 p-4 card-hover slide-in relative overflow-hidden
-      ${item.status === 'good' ? 'border-green-200 bg-gradient-to-br from-green-50 to-white' : 
-        item.status === 'warning' ? 'border-yellow-200 bg-gradient-to-br from-yellow-50 to-white' : 
-        'border-red-200 bg-gradient-to-br from-red-50 to-white'}
-    `}>
+  const renderMonitoringCard = useCallback((item: MonitoringData) => (
+    <div 
+      key={item.id} 
+      className={`
+        bg-white rounded-xl shadow-sm border-2 p-4 card-hover slide-in relative overflow-hidden cursor-pointer transition-all duration-200
+        ${item.status === 'good' ? 'border-green-200 bg-gradient-to-br from-green-50 to-white hover:border-green-300 hover:shadow-md' : 
+          item.status === 'warning' ? 'border-yellow-200 bg-gradient-to-br from-yellow-50 to-white hover:border-yellow-300 hover:shadow-md' : 
+          'border-red-200 bg-gradient-to-br from-red-50 to-white hover:border-red-300 hover:shadow-md'}
+      `}
+      onClick={() => handleCardClick(item)}
+      title="Klik untuk melihat detail"
+    >
       {/* Header with Icon and Status */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center space-x-2">
@@ -344,9 +545,9 @@ export default function PublicDashboard() {
             item.status === 'good' ? 'text-green-600' : 
             item.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
           }`}>
-            {item.value}%
+            {isNaN(item.value) ? '0' : item.value.toFixed(1)}%
           </span>
-          <span className="text-xs text-gray-500">{item.currentValue}</span>
+          <span className="text-xs text-gray-500">{item.currentValue || '(0/0)'}</span>
         </div>
       </div>
 
@@ -362,13 +563,13 @@ export default function PublicDashboard() {
         <div className="w-full bg-gray-200 rounded-full h-2.5">
           <div 
             className={`h-2.5 rounded-full transition-all duration-500 ${getProgressColor(item.status)}`}
-            style={{ width: `${item.progress}%` }}
+            style={{ width: `${isNaN(item.progress) ? 0 : Math.min(Math.max(item.progress, 0), 100)}%` }}
           ></div>
         </div>
       </div>
 
     </div>
-  );
+  ), [handleCardClick, getProgressColor]);
 
 
   return (
@@ -443,7 +644,7 @@ export default function PublicDashboard() {
               <div className="text-right hidden sm:block">
                 <p className="text-xs sm:text-sm text-gray-500">Last Updated</p>
                 <p className="text-xs sm:text-sm font-semibold text-gray-800">
-                  {lastUpdate.toLocaleTimeString('id-ID')}
+                  {isMounted ? lastUpdate.toLocaleTimeString('id-ID') : '--:--:--'}
                 </p>
               </div>
               <div className="w-3 h-3 bg-green-400 rounded-full pulse-animation"></div>
@@ -518,13 +719,12 @@ export default function PublicDashboard() {
           </div>
         </div>
 
-        {/* Loading State */}
+        {/* Loading Skeleton */}
         {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 text-lg">Memuat data monitoring...</p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4 lg:gap-6 items-start">
+            {Array.from({ length: 12 }).map((_, index) => (
+              <LoadingSkeleton key={index} />
+            ))}
           </div>
         )}
 
@@ -547,6 +747,245 @@ export default function PublicDashboard() {
         )}
         
       </main>
+
+      {/* System Detail Modal */}
+      {selectedSystem && (
+        <div className="fixed inset-0 z-40 modal-backdrop flex items-center justify-center p-4" onClick={closeModal}>
+          <div 
+            className={`bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-200 transform transition-all duration-300 ${
+              showModal ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 translate-y-4'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                  <span className="text-2xl mr-3">{selectedSystem.icon}</span>
+                  {selectedSystem.title}
+                </h2>
+                <button
+                  onClick={closeModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+
+              {modalLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 p-4 rounded-lg animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded mb-3"></div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <div className="h-3 bg-gray-200 rounded w-20"></div>
+                        <div className="h-3 bg-gray-200 rounded w-16"></div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="h-3 bg-gray-200 rounded w-24"></div>
+                        <div className="h-3 bg-gray-200 rounded w-20"></div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="h-3 bg-gray-200 rounded w-18"></div>
+                        <div className="h-3 bg-gray-200 rounded w-14"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded mb-3"></div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        <div className="h-6 bg-gray-200 rounded w-20"></div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="h-3 bg-gray-200 rounded w-12"></div>
+                        <div className="h-3 bg-gray-200 rounded w-16"></div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="h-3 bg-gray-200 rounded w-20"></div>
+                        <div className="h-3 bg-gray-200 rounded w-32"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-span-full mt-6">
+                    <div className="h-4 bg-gray-200 rounded mb-4"></div>
+                    <div className="bg-white p-4 rounded-lg border">
+                      <div className="h-48 bg-gray-200 rounded"></div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Performance Info */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Informasi Kinerja</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Nilai Saat Ini:</span>
+                        <span className="text-sm font-medium">
+                          {selectedSystem.id < 1000 && systemDetailData.length > 0 
+                            ? `${parseFloat(systemDetailData[systemDetailData.length - 1]?.current_value || '0').toFixed(2)}` 
+                            : selectedSystem.value.toFixed(2)
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Nilai Maksimal:</span>
+                        <span className="text-sm font-medium">
+                          {selectedSystem.id < 1000 ? '12' : selectedSystem.maxValue} {selectedSystem.id < 1000 ? 'poin' : selectedSystem.unit}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Persentase:</span>
+                        <span className={`text-sm font-medium ${
+                          selectedSystem.status === 'good' ? 'text-green-600' : 
+                          selectedSystem.status === 'warning' ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {selectedSystem.value.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* System Status */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Status Sistem</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Status:</span>
+                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${
+                          selectedSystem.status === 'good' ? 'bg-green-100 text-green-700' :
+                          selectedSystem.status === 'warning' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {selectedSystem.status === 'good' ? 'Baik' : 
+                           selectedSystem.status === 'warning' ? 'Peringatan' : 'Kritis'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Trend:</span>
+                        <span className={`text-sm font-medium ${getTrendInfo(systemDetailData).color}`}>
+                          {getTrendInfo(systemDetailData).trend}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Last Update:</span>
+                        <span className="text-sm font-medium">
+                          {isMounted ? `${lastUpdate.toLocaleDateString('id-ID')} ${lastUpdate.toLocaleTimeString('id-ID', { 
+                            hour: '2-digit', 
+                            minute: '2-digit', 
+                            second: '2-digit' 
+                          })}` : 'Loading...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Performance Chart */}
+              {!modalLoading && systemDetailData.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-gray-700 mb-4">Grafik Performa 7 Hari Terakhir</h3>
+                  <div className="bg-white p-4 rounded-lg border">
+                    <svg width="100%" height="200" viewBox="0 0 800 200" className="overflow-visible">
+                      {/* Grid lines */}
+                      {[0, 20, 40, 60, 80, 100].map(value => {
+                        const y = 20 + ((100 - value) * 1.6);
+                        return (
+                          <g key={value}>
+                            <line 
+                              x1="50" 
+                              y1={y} 
+                              x2="750" 
+                              y2={y} 
+                              stroke="#e5e7eb" 
+                              strokeWidth="1"
+                            />
+                            <text 
+                              x="40" 
+                              y={y + 4} 
+                              fontSize="12" 
+                              fill="#64748b" 
+                              textAnchor="end"
+                            >
+                              {value}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      
+                      {/* X-axis labels */}
+                      {systemDetailData.map((data, index) => {
+                        const x = 50 + (index * (700 / Math.max(systemDetailData.length - 1, 1)));
+                        return (
+                          <text 
+                            key={index}
+                            x={x} 
+                            y="190" 
+                            fontSize="12" 
+                            fill="#64748b" 
+                            textAnchor="middle"
+                          >
+                            T{data.quarter}
+                          </text>
+                        );
+                      })}
+                      
+                      {/* Chart Line */}
+                      <polyline
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth="3"
+                        points={systemDetailData.map((data, index) => {
+                          const percentage = selectedSystem.id < 1000 
+                            ? (parseFloat(data.current_value) / 12) * 100 
+                            : data.percentage || selectedSystem.value;
+                          const x = 50 + (index * (700 / Math.max(systemDetailData.length - 1, 1)));
+                          const y = 20 + ((100 - percentage) * 1.6);
+                          return `${x},${y}`;
+                        }).join(' ')}
+                      />
+                      
+                      {/* Data Points */}
+                      {systemDetailData.map((data, index) => {
+                        const percentage = selectedSystem.id < 1000 
+                          ? (parseFloat(data.current_value) / 12) * 100 
+                          : data.percentage || selectedSystem.value;
+                        const x = 50 + (index * (700 / Math.max(systemDetailData.length - 1, 1)));
+                        const y = 20 + ((100 - percentage) * 1.6);
+                        
+                        return (
+                          <g key={index}>
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="4"
+                              fill="#3b82f6"
+                              stroke="white"
+                              strokeWidth="2"
+                            />
+                            <title>{`${data.year} T${data.quarter}: ${percentage.toFixed(1)}%`}</title>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    
+                    <div className="mt-4 flex items-center justify-center">
+                      <div className="flex items-center space-x-2 text-xs text-gray-600">
+                        <div className="w-3 h-0.5 bg-blue-500"></div>
+                        <span>Persentase Capaian (%)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
