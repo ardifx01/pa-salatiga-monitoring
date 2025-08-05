@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       WHERE mc.is_active = TRUE
     `;
     
-    const params: any[] = [];
+    const params: (string | number)[] = [];
     
     if (year) {
       query += ' AND md.year = ?';

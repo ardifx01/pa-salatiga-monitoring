@@ -10,8 +10,8 @@ export async function GET() {
       'SELECT setting_key, setting_value, setting_type FROM app_settings ORDER BY setting_key'
     );
     
-    const settings: Record<string, any> = {};
-    (rows as any[]).forEach((row) => {
+    const settings: Record<string, string | number | boolean> = {};
+    (rows as { setting_key: string; setting_value: string; setting_type: string }[]).forEach((row) => {
       let value = row.setting_value;
       
       // Convert value based on type
@@ -50,7 +50,7 @@ export async function PUT(request: NextRequest) {
     
     // Update each setting
     for (const [key, value] of Object.entries(settings)) {
-      let stringValue = String(value);
+      const stringValue = String(value);
       
       await db.execute(
         'UPDATE app_settings SET setting_value = ?, updated_at = NOW() WHERE setting_key = ?',

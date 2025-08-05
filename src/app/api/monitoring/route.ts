@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       [name, description, status]
     );
     
-    return NextResponse.json({ success: true, id: (result as any).insertId });
+    return NextResponse.json({ success: true, id: (result as { insertId: number }).insertId });
   } catch (error) {
     console.error('Error creating monitoring system:', error);
     return NextResponse.json(

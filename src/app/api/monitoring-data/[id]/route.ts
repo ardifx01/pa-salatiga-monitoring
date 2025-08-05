@@ -25,7 +25,7 @@ export async function DELETE(
 
     const connection = await mysql.createConnection(dbConfig);
     
-    const [result] = await connection.execute(
+    await connection.execute(
       'DELETE FROM monitoring_data WHERE id = ?',
       [id]
     );

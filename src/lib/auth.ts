@@ -23,7 +23,7 @@ export const authOptions: NextAuthOptions = {
             [credentials.username]
           );
           
-          const users = rows as any[];
+          const users = rows as { id: number; username: string; password: string; email: string; full_name: string }[];
           const user = users[0];
 
           if (user && await bcrypt.compare(credentials.password, user.password)) {

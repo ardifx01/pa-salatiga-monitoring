@@ -69,7 +69,6 @@ const DEFAULT_SETTINGS: AppSettings = {
 export default function PublicDashboard() {
   // State management
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentSlide, setCurrentSlide] = useState(0);
   const [monitoringData, setMonitoringData] = useState<MonitoringData[]>([]);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [slideProgress, setSlideProgress] = useState(0);
